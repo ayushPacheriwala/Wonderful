@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doctor Search</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f4f8;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0 2rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    header svg { flex-shrink: 0; }
+    header h1 { font-size: 1.1rem; font-weight: 700; color: #2d3748; }
+    header span { font-size: 0.85rem; color: #718096; margin-left: 0.25rem; }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    /* ── Search section ── */
+    .search-section { margin-bottom: 2rem; }
+
+    .search-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #4a5568;
+      margin-bottom: 0.5rem;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 0.5rem;
+      background: #fff;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 0.5rem 0.5rem 0.5rem 1rem;
+      transition: border-color 0.2s;
+    }
+    .search-box:focus-within { border-color: #4299e1; }
+    .search-box.recording { border-color: #fc8181; animation: pulse-border 1s infinite; }
+
+    @keyframes pulse-border {
+      0%, 100% { border-color: #fc8181; }
+      50%       { border-color: #f56565; }
+    }
+
+    #query-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+      color: #2d3748;
+      background: transparent;
+      min-width: 0;
+    }
+    #query-input::placeholder { color: #a0aec0; }
+
+    .btn {
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.55rem 1rem;
+      transition: background 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    #mic-btn {
+      background: #ebf8ff;
+      color: #2b6cb0;
+    }
+    #mic-btn:hover { background: #bee3f8; }
+    #mic-btn.recording {
+      background: #fff5f5;
+      color: #c53030;
+    }
+
+    #search-btn {
+      background: #4299e1;
+      color: #fff;
+    }
+    #search-btn:hover { background: #3182ce; }
+    #search-btn:disabled { background: #a0aec0; cursor: not-allowed; }
+
+    /* ── Status bar ── */
+    #status {
+      margin-top: 0.6rem;
+      font-size: 0.82rem;
+      color: #718096;
+      min-height: 1.2em;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      display: none;
+    }
+    .dot.visible { display: inline-block; }
+    .dot.red   { color: #e53e3e; animation: blink 0.8s infinite; }
+    .dot.blue  { color: #4299e1; animation: spin-dot 1s linear infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    @keyframes spin-dot { to { transform: rotate(360deg); } }
+
+    /* ── Example prompts ── */
+    .examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    .example-chip {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 20px;
+      padding: 0.35rem 0.85rem;
+      font-size: 0.8rem;
+      color: #4a5568;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .example-chip:hover { border-color: #4299e1; color: #2b6cb0; }
+
+    /* ── Results ── */
+    #results-section { display: none; }
+
+    .results-header {
+      font-size: 0.8rem;
+      color: #718096;
+      margin-bottom: 1rem;
+    }
+    .results-header strong { color: #2d3748; }
+
+    .results-list { display: flex; flex-direction: column; gap: 0.75rem; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      padding: 1.25rem 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.25rem 1rem;
+      transition: box-shadow 0.15s;
+    }
+    .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
+
+    .card-left  { grid-column: 1; }
+    .card-right { grid-column: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
+
+    .card-name {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #2d3748;
+      margin-bottom: 0.15rem;
+    }
+
+    .card-specialty {
+      display: inline-block;
+      background: #ebf8ff;
+      color: #2b6cb0;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      margin-bottom: 0.6rem;
+    }
+
+    .card-meta {
+      font-size: 0.85rem;
+      color: #4a5568;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .card-meta span { display: flex; align-items: center; gap: 0.35rem; }
+
+    .card-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.6rem; }
+    .tag {
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      color: #4a5568;
+      padding: 0.1rem 0.45rem;
+    }
+
+    .rating {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #2d3748;
+    }
+    .stars { font-size: 0.9rem; color: #f6ad55; letter-spacing: -1px; }
+
+    .card-availability {
+      font-size: 0.75rem;
+      color: #718096;
+      text-align: right;
+    }
+
+    .speak-btn {
+      background: none;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      color: #718096;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .speak-btn:hover { border-color: #4299e1; color: #2b6cb0; }
+
+    /* ── Empty / error states ── */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #718096;
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .empty-state p { font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4299e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+  </svg>
+  <h1>Doctor Search <span>· Romania</span></h1>
+</header>
+
+<main>
+  <section class="search-section">
+    <label class="search-label" for="query-input">Find a doctor</label>
+
+    <div class="search-box" id="search-box">
+      <input
+        type="text"
+        id="query-input"
+        placeholder='e.g. "Dr. Ionut Dumitrescu" or "Cardiologist near Cluj"'
+        autocomplete="off"
+      />
+      <button class="btn" id="mic-btn" title="Hold to record">
+        <svg id="mic-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M19 10a7 7 0 0 1-14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8"  y1="22" x2="16" y2="22"/>
+        </svg>
+        <span id="mic-label">Speak</span>
+      </button>
+      <button class="btn" id="search-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        Search
+      </button>
+    </div>
+
+    <div id="status">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-text"></span>
+    </div>
+
+    <div class="examples">
+      <span class="example-chip" onclick="fillExample(this)">Dr. Ionut Dumitrescu from Psychiatry</span>
+      <span class="example-chip" onclick="fillExample(this)">Cardiology doctor at Clinica Cluj-Napoca Care</span>
+      <span class="example-chip" onclick="fillExample(this)">Recommend a dermatologist near Cluj</span>
+    </div>
+  </section>
+
+  <section id="results-section">
+    <div class="results-header" id="results-header"></div>
+    <div class="results-list" id="results-list"></div>
+  </section>
+</main>
+
+<script>
+  // ── DOM refs ──
+  const input      = document.getElementById('query-input');
+  const searchBtn  = document.getElementById('search-btn');
+  const micBtn     = document.getElementById('mic-btn');
+  const micLabel   = document.getElementById('mic-label');
+  const searchBox  = document.getElementById('search-box');
+  const statusDot  = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const resultsSection = document.getElementById('results-section');
+  const resultsHeader  = document.getElementById('results-header');
+  const resultsList    = document.getElementById('results-list');
+
+  // ── Status helper ──
+  function setStatus(msg, dotClass) {
+    statusText.textContent = msg;
+    statusDot.className = 'dot' + (dotClass ? ' visible ' + dotClass : '');
+  }
+
+  // ── Example chips ──
+  function fillExample(el) {
+    input.value = el.textContent;
+    input.focus();
+    doSearch();
+  }
+
+  // ── Search ──
+  searchBtn.addEventListener('click', doSearch);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+  async function doSearch() {
+    const query = input.value.trim();
+    if (!query) return;
+
+    searchBtn.disabled = true;
+    setStatus('Searching…', 'blue');
+    resultsSection.style.display = 'none';
+
+    try {
+      const res  = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json();
+
+      if (data.error) { setStatus('Error: ' + data.error, ''); return; }
+
+      renderResults(data.results, data.query);
+      setStatus('');
+    } catch (err) {
+      setStatus('Network error — is the server running?', '');
+    } finally {
+      searchBtn.disabled = false;
+    }
+  }
+
+  // ── Results rendering ──
+  function stars(rating) {
+    const full  = Math.round(rating);
+    return '★'.repeat(full) + '☆'.repeat(5 - full);
+  }
+
+  function renderResults(results, query) {
+    resultsSection.style.display = 'block';
+
+    if (!results || results.length === 0) {
+      resultsHeader.innerHTML = `No results for <strong>"${escHtml(query)}"</strong>`;
+      resultsList.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">🔍</div>
+          <p>Try a different name, specialty, or location.</p>
+        </div>`;
+      return;
+    }
+
+    resultsHeader.innerHTML = `${results.length} result${results.length > 1 ? 's' : ''} for <strong>"${escHtml(query)}"</strong>`;
+
+    resultsList.innerHTML = results.map((r, i) => `
+      <div class="card">
+        <div class="card-left">
+          <div class="card-name">${escHtml(r.full_name)}</div>
+          <div><span class="card-specialty">${escHtml(r.speciality)}</span></div>
+          <div class="card-meta">
+            <span>🏥 ${escHtml(r.clinic_name)}</span>
+            <span>📍 ${escHtml(r.location)}, ${escHtml(r.county)}</span>
+            <span>📞 ${escHtml(r.phone)}</span>
+            <span>✉️ ${escHtml(r.email)}</span>
+          </div>
+          <div class="card-tags">
+            ${(r.languages || []).map(l => `<span class="tag">${escHtml(l)}</span>`).join('')}
+            <span class="tag">${r.years_experience} yrs exp</span>
+          </div>
+        </div>
+        <div class="card-right">
+          <div>
+            <div class="rating">${r.rating.toFixed(1)}</div>
+            <div class="stars">${stars(r.rating)}</div>
+          </div>
+          <div class="card-availability">${escHtml(r.availability)}</div>
+          <button class="speak-btn" onclick="speakResult(${i})" title="Read aloud">🔊 Read</button>
+        </div>
+      </div>
+    `).join('');
+
+    window._lastResults = results;
+  }
+
+  function escHtml(str) {
+    return String(str ?? '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── TTS — browser SpeechSynthesis ──
+  function speakResult(index) {
+    const r = (window._lastResults || [])[index];
+    if (!r) return;
+    const text = `${r.full_name}, ${r.speciality} specialist at ${r.clinic_name} in ${r.location}. Rating: ${r.rating} out of 5. Available ${r.availability}.`;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = 0.95;
+    window.speechSynthesis.speak(utt);
+  }
+
+  // ── Microphone / STT ──
+  let mediaRecorder = null;
+  let audioChunks   = [];
+  let isRecording   = false;
+
+  micBtn.addEventListener('click', async () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  });
+
+  async function startRecording() {
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setStatus('Microphone access denied.', '');
+      return;
+    }
+
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      await transcribe(blob);
+    };
+
+    mediaRecorder.start();
+    isRecording = true;
+    micBtn.classList.add('recording');
+    searchBox.classList.add('recording');
+    micLabel.textContent = 'Stop';
+    setStatus('Recording…', 'red');
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    searchBox.classList.remove('recording');
+    micLabel.textContent = 'Speak';
+  }
+
+  async function transcribe(blob) {
+    setStatus('Transcribing…', 'blue');
+    const form = new FormData();
+    form.append('audio', blob, 'recording.webm');
+
+    try {
+      const res  = await fetch('/api/transcribe', { method: 'POST', body: form });
+      const data = await res.json();
+
+      if (data.error) {
+        setStatus('Transcription error: ' + data.error, '');
+        return;
+      }
+      if (data.text) {
+        input.value = data.text;
+        setStatus('Transcribed — searching…', '');
+        await doSearch();
+      } else {
+        setStatus('No speech detected.', '');
+      }
+    } catch {
+      setStatus('Transcription failed — check server logs.', '');
+    }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+jellyfish>=1.2.0
+phonetics>=1.0.5
+openai>=1.0.0
+python-dotenv>=1.0.0

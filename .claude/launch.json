@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "doctor-search",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "flask", "--app", "/Users/apacheriwala/Documents/Wonderful/app.py", "run", "--port", "5001"],
+      "port": 5001,
+      "autoPort": false
+    }
+  ]
+}

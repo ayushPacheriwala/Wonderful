@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: doctor-search
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python build_db.py && gunicorn --bind 0.0.0.0:$PORT app:app
+    envVars:
+      - key: FPT_API_KEY
+        sync: false          # Render will prompt you to enter this — never committed to git
+      - key: FPT_MODEL
+        value: Qwen3-32B
+      - key: FPT_BASE_URL
+        value: https://mkp-api.fptcloud.com
+      - key: FPT_STT_MODEL
+        value: whisper-large-v3-turbo

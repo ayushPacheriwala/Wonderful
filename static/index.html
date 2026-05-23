@@ -342,6 +342,9 @@
 
     /* ── Mobile (≤768px) ── */
     @media (max-width: 768px) {
+      html, body { height: auto; }
+      body { min-height: 100vh; }
+
       header {
         padding: 0 1rem;
         height: 52px;
@@ -350,7 +353,17 @@
       header .sub { font-size: 0.72rem; }
 
       .layout {
-        grid-template-columns: 1fr;
+        display: block;
+        overflow: visible;
+        flex: none;
+      }
+
+      /* Chat fills the initial viewport so it still feels like a chat app */
+      .chat-panel {
+        height: calc(100vh - 52px);
+      }
+      @supports (height: 100dvh) {
+        .chat-panel { height: calc(100dvh - 52px); }
       }
 
       .messages {
@@ -373,7 +386,6 @@
 
       .input-area {
         padding: 0.7rem 0.85rem;
-        padding-bottom: calc(0.7rem + env(safe-area-inset-bottom));
         gap: 0.4rem;
       }
       textarea {
@@ -382,51 +394,18 @@
       }
       .icon-btn { width: 42px; height: 42px; }
 
-      /* Doctors panel becomes a bottom sheet */
+      /* Doctors panel: inline block below the chat, hidden until results */
       .doctors-panel {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        max-height: 80vh;
-        background: #fff;
         border-left: none;
         border-top: 1px solid var(--gray-200);
-        border-radius: 18px 18px 0 0;
-        box-shadow: 0 -6px 24px rgba(0,0,0,0.12);
-        transform: translateY(100%);
-        transition: transform 0.28s ease;
-        z-index: 100;
-        visibility: hidden;
+        display: none;
       }
-      .doctors-panel.has-results {
-        visibility: visible;
-        transform: translateY(calc(100% - 56px));
-      }
-      .doctors-panel.has-results.open {
-        transform: translateY(0);
-      }
-      .doctors-panel .panel-header {
-        cursor: pointer;
-        padding: 1rem 1.1rem 0.85rem;
-        position: relative;
-        user-select: none;
-      }
-      .doctors-panel .panel-header::before {
-        content: '';
-        position: absolute;
-        top: 7px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 36px;
-        height: 4px;
-        border-radius: 99px;
-        background: var(--gray-200);
-      }
+      .doctors-panel.has-results { display: flex; }
       .doctors-list {
+        overflow-y: visible;
         padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
       }
-      .empty-panel { padding: 1.5rem; }
+      .panel-header { cursor: default; }
     }
 
     /* ── Small phones (≤380px) ── */
@@ -495,7 +474,7 @@
 
   <!-- ── Doctors panel ── -->
   <div class="doctors-panel" id="doctors-panel">
-    <div class="panel-header" onclick="toggleDoctorsPanel()">
+    <div class="panel-header">
       <span class="panel-title">Recommendations</span>
       <span class="count-badge" id="count-badge"></span>
     </div>
@@ -531,13 +510,6 @@
   const doctorsPanel = document.getElementById('doctors-panel');
   const countBadge   = document.getElementById('count-badge');
   const suggestions  = document.getElementById('suggestions');
-
-  // ── Mobile bottom-sheet toggle ──
-  function toggleDoctorsPanel() {
-    if (doctorsPanel.classList.contains('has-results')) {
-      doctorsPanel.classList.toggle('open');
-    }
-  }
 
   // ── Simple markdown: **bold** and line breaks ──
   function renderMd(text) {
@@ -683,7 +655,10 @@
 
     doctorsCont.innerHTML = '';
     doctorsCont.appendChild(list);
-    doctorsPanel.classList.add('has-results', 'open');
+    doctorsPanel.classList.add('has-results');
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      doctorsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     window._doctors = doctors;
   }
 

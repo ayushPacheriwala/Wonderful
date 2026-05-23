@@ -339,6 +339,102 @@
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 99px; }
+
+    /* ── Mobile (≤768px) ── */
+    @media (max-width: 768px) {
+      header {
+        padding: 0 1rem;
+        height: 52px;
+      }
+      header h1 { font-size: 0.95rem; }
+      header .sub { font-size: 0.72rem; }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .messages {
+        padding: 1rem 0.85rem;
+        gap: 0.85rem;
+      }
+      .msg { max-width: 90%; }
+      .bubble { font-size: 0.92rem; }
+
+      /* Horizontal scroll for suggestion chips so they don't wrap awkwardly */
+      .suggestions {
+        padding: 0 0.85rem 0.65rem;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .suggestions::-webkit-scrollbar { display: none; }
+      .suggestion { flex-shrink: 0; }
+
+      .input-area {
+        padding: 0.7rem 0.85rem;
+        padding-bottom: calc(0.7rem + env(safe-area-inset-bottom));
+        gap: 0.4rem;
+      }
+      textarea {
+        font-size: 16px; /* prevent iOS zoom on focus */
+        padding: 0.6rem 0.8rem;
+      }
+      .icon-btn { width: 42px; height: 42px; }
+
+      /* Doctors panel becomes a bottom sheet */
+      .doctors-panel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        max-height: 80vh;
+        background: #fff;
+        border-left: none;
+        border-top: 1px solid var(--gray-200);
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -6px 24px rgba(0,0,0,0.12);
+        transform: translateY(100%);
+        transition: transform 0.28s ease;
+        z-index: 100;
+        visibility: hidden;
+      }
+      .doctors-panel.has-results {
+        visibility: visible;
+        transform: translateY(calc(100% - 56px));
+      }
+      .doctors-panel.has-results.open {
+        transform: translateY(0);
+      }
+      .doctors-panel .panel-header {
+        cursor: pointer;
+        padding: 1rem 1.1rem 0.85rem;
+        position: relative;
+        user-select: none;
+      }
+      .doctors-panel .panel-header::before {
+        content: '';
+        position: absolute;
+        top: 7px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 4px;
+        border-radius: 99px;
+        background: var(--gray-200);
+      }
+      .doctors-list {
+        padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      }
+      .empty-panel { padding: 1.5rem; }
+    }
+
+    /* ── Small phones (≤380px) ── */
+    @media (max-width: 380px) {
+      header h1 .sub { display: none; }
+      .msg { max-width: 95%; }
+      .bubble { padding: 0.55rem 0.75rem; }
+    }
   </style>
 </head>
 <body>
@@ -398,8 +494,8 @@
   </div>
 
   <!-- ── Doctors panel ── -->
-  <div class="doctors-panel">
-    <div class="panel-header">
+  <div class="doctors-panel" id="doctors-panel">
+    <div class="panel-header" onclick="toggleDoctorsPanel()">
       <span class="panel-title">Recommendations</span>
       <span class="count-badge" id="count-badge"></span>
     </div>
@@ -432,8 +528,16 @@
   const sendBtn      = document.getElementById('send-btn');
   const micBtn       = document.getElementById('mic-btn');
   const doctorsCont  = document.getElementById('doctors-container');
+  const doctorsPanel = document.getElementById('doctors-panel');
   const countBadge   = document.getElementById('count-badge');
   const suggestions  = document.getElementById('suggestions');
+
+  // ── Mobile bottom-sheet toggle ──
+  function toggleDoctorsPanel() {
+    if (doctorsPanel.classList.contains('has-results')) {
+      doctorsPanel.classList.toggle('open');
+    }
+  }
 
   // ── Simple markdown: **bold** and line breaks ──
   function renderMd(text) {
@@ -579,6 +683,7 @@
 
     doctorsCont.innerHTML = '';
     doctorsCont.appendChild(list);
+    doctorsPanel.classList.add('has-results', 'open');
     window._doctors = doctors;
   }
 

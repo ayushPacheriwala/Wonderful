@@ -12,6 +12,7 @@ Scenarios handled by handle_query():
 """
 
 import json
+import re
 import sqlite3
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +21,15 @@ import phonetics
 
 DB_PATH = "healthcare.db"
 _PHONETIC_CANDIDATE_LIMIT = 50
+
+_DAY_ABBR = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+_DAY_FULL = {
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+    "friday": 4, "saturday": 5, "sunday": 6,
+}
+_AVAIL_RE = re.compile(
+    r"(?P<d1>\w{3})-(?P<d2>\w{3})\s+(?P<h1>\d{1,2}):(?P<m1>\d{2})-(?P<h2>\d{1,2}):(?P<m2>\d{2})"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +135,55 @@ def _fuzzy_match(value: str, candidates: List[str], threshold: float = 0.75) -> 
     return best if score >= threshold else None
 
 
+def _day_index(day: Optional[str]) -> Optional[int]:
+    if not day:
+        return None
+    d = day.strip().lower()
+    if d in _DAY_FULL:
+        return _DAY_FULL[d]
+    return _DAY_ABBR.get(d[:3])
+
+
+def _time_minutes(t: Optional[str]) -> Optional[int]:
+    if not t:
+        return None
+    m = re.match(r"(\d{1,2})(?::(\d{2}))?\s*(am|pm)?", t.strip(), re.IGNORECASE)
+    if not m:
+        return None
+    hour = int(m.group(1))
+    minute = int(m.group(2) or 0)
+    suffix = (m.group(3) or "").lower()
+    if suffix == "pm" and hour < 12:
+        hour += 12
+    elif suffix == "am" and hour == 12:
+        hour = 0
+    return hour * 60 + minute
+
+
+def _availability_matches(
+    availability: Optional[str],
+    day_idx: Optional[int],
+    time_min: Optional[int],
+) -> bool:
+    """True when the doctor's availability covers the requested day and/or time."""
+    if day_idx is None and time_min is None:
+        return True
+    if not availability:
+        return False
+    m = _AVAIL_RE.search(availability)
+    if not m:
+        return True  # unparseable strings are not filtered out
+    d1 = _DAY_ABBR.get(m.group("d1").lower())
+    d2 = _DAY_ABBR.get(m.group("d2").lower())
+    open_min = int(m.group("h1")) * 60 + int(m.group("m1"))
+    close_min = int(m.group("h2")) * 60 + int(m.group("m2"))
+    if day_idx is not None and (d1 is None or d2 is None or not (d1 <= day_idx <= d2)):
+        return False
+    if time_min is not None and not (open_min <= time_min <= close_min):
+        return False
+    return True
+
+
 def search_by_fields(
     conn: sqlite3.Connection,
     name: Optional[str] = None,
@@ -132,19 +191,28 @@ def search_by_fields(
     clinic: Optional[str] = None,
     location: Optional[str] = None,
     intent: str = "specific",
+    min_experience: Optional[int] = None,
+    min_rating: Optional[float] = None,
+    open_day: Optional[str] = None,
+    open_time: Optional[str] = None,
     limit: int = 5,
 ) -> List[Dict[str, Any]]:
     """
     Compose a SQL query from whichever fields were extracted from the user query.
 
-    name       → Double Metaphone phonetic match, then Jaro-Winkler re-rank
-    speciality → fuzzy-normalised to the 20 known values, then exact SQL filter
-    clinic     → FTS5 search on clinic_name column
-    location   → FTS5 search on location column
-    intent     → "recommend" sorts by rating DESC; others keep phonetic rank first
+    name           → Double Metaphone phonetic match, then Jaro-Winkler re-rank
+    speciality     → fuzzy-normalised to the 20 known values, then exact SQL filter
+    clinic         → FTS5 search on clinic_name column
+    location       → FTS5 search on location column
+    min_experience → SQL filter on years_experience
+    min_rating     → SQL filter on rating
+    open_day       → post-filter against the doctor's availability range
+    open_time      → post-filter against the doctor's availability range
+    intent         → "recommend" sorts by rating DESC; others keep phonetic rank first
     """
     conn.row_factory = sqlite3.Row
-    conditions: List[str] = []
+    core_conditions: List[str] = []
+    filter_conditions: List[str] = []
     params: List[Any] = []
 
     # --- Name: phonetic candidates become an id allowlist ---
@@ -155,7 +223,7 @@ def search_by_fields(
         if candidates:
             name_candidate_ids = [r["id"] for r in candidates]
             ph = ",".join("?" * len(name_candidate_ids))
-            conditions.append(f"d.id IN ({ph})")
+            core_conditions.append(f"d.id IN ({ph})")
             params.extend(name_candidate_ids)
 
     # --- Speciality: fuzzy-match to known values, then exact filter ---
@@ -163,7 +231,7 @@ def search_by_fields(
         known = _get_distinct(conn, "speciality")
         matched = _fuzzy_match(speciality, known)
         if matched:
-            conditions.append("d.speciality = ?")
+            core_conditions.append("d.speciality = ?")
             params.append(matched)
 
     # --- Clinic + location: FTS5 over indexed columns ---
@@ -175,18 +243,29 @@ def search_by_fields(
 
     if fts_terms:
         fts_q = " OR ".join(f'"{t}"*' for t in fts_terms)
-        conditions.append(
+        core_conditions.append(
             "d.id IN (SELECT rowid FROM doctors_fts WHERE doctors_fts MATCH ?)"
         )
         params.append(fts_q)
 
-    if not conditions:
+    if not core_conditions:
         return []
 
-    where = "WHERE " + " AND ".join(conditions)
+    # --- Numeric filters ---
+    if min_experience is not None:
+        filter_conditions.append("d.years_experience >= ?")
+        params.append(int(min_experience))
+    if min_rating is not None:
+        filter_conditions.append("d.rating >= ?")
+        params.append(float(min_rating))
+
+    where = "WHERE " + " AND ".join(core_conditions + filter_conditions)
 
     # Fetch more rows than needed when we'll re-rank by name similarity
-    fetch_limit = (len(name_candidate_ids) if name_candidate_ids else limit * 4)
+    # or post-filter by availability
+    needs_post_filter = open_day or open_time
+    base_fetch = len(name_candidate_ids) if name_candidate_ids else limit * 4
+    fetch_limit = base_fetch * 4 if needs_post_filter else base_fetch
     order = "ORDER BY d.rating DESC"
 
     rows = conn.execute(
@@ -197,6 +276,12 @@ def search_by_fields(
     # Re-rank by name similarity when a name was part of the query
     if name and rows:
         rows = sorted(rows, key=lambda r: _jaro_winkler_score(r, name), reverse=True)
+
+    # Post-filter on availability
+    if needs_post_filter:
+        day_idx = _day_index(open_day)
+        time_min = _time_minutes(open_time)
+        rows = [r for r in rows if _availability_matches(r["availability"], day_idx, time_min)]
 
     return [_row_to_dict(r) for r in rows[:limit]]
 

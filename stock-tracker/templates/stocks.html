@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Stocks · Stock Tracker{% endblock %}
+
+{% block content %}
+<div class="panel-head">
+  <h1>Stocks</h1>
+</div>
+
+<form method="get" action="{{ url_for('stocks_list') }}" class="filters">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search ticker or name...">
+  <select name="theme" onchange="this.form.submit()">
+    <option value="">All themes</option>
+    {% for t in themes %}
+      <option value="{{ t.id }}" {{ 'selected' if active_theme and active_theme.id == t.id }}>{{ t.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="sort" onchange="this.form.submit()">
+    {% for key, label in [('name','Name'),('ticker','Ticker'),('price','Price'),('market_cap','Market cap'),('added','Recently added')] %}
+      <option value="{{ key }}" {{ 'selected' if sort == key }}>Sort: {{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">Apply</button>
+</form>
+
+{% if stocks %}
+  <table class="table">
+    <thead>
+      <tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Price</th><th class="r">P/E</th><th class="r">Market cap</th><th class="c">Value</th><th class="c">Rating</th></tr>
+    </thead>
+    <tbody>
+      {% for s in stocks %}
+        {% set ev = ratings[s.id] %}
+        {% set pe = ev.by_key.get('trailing_pe') %}
+        {% set val = valuations[s.id] %}
+        <tr onclick="window.location='{{ url_for('stock_detail', stock_id=s.id) }}'">
+          <td><strong>{{ s.ticker }}</strong></td>
+          <td>{{ s.name }}</td>
+          <td class="muted">{{ s.sector or '&mdash;' }}</td>
+          <td class="r">{{ s.price | num }}</td>
+          <td class="r cell sig-{{ pe.signal if pe else 'na' }}">{{ s.trailing_pe | num }}</td>
+          <td class="r">{{ s.market_cap | human_num }}</td>
+          <td class="c"><span class="pill sig-{{ val.signal }}">{{ val.verdict }}</span></td>
+          <td class="c"><span class="pill sig-{{ ev.overall.signal }}">{{ ev.overall.rating }}</span></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="muted">No stocks match. {% if q or active_theme %}<a href="{{ url_for('stocks_list') }}">Clear filters</a>.{% else %}Add one from the dashboard.{% endif %}</p>
+{% endif %}
+{% endblock %}

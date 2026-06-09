@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Themes · Stock Tracker{% endblock %}
+
+{% block content %}
+<div class="panel-head"><h1>Themes</h1></div>
+
+<section class="panel">
+  <div class="panel-head"><h2>New theme</h2></div>
+  <form method="post" action="{{ url_for('add_theme') }}" class="theme-form">
+    <input type="text" name="name" placeholder="Theme name (e.g. AI infrastructure)" required>
+    <input type="text" name="description" placeholder="Description (optional)">
+    <input type="color" name="color" value="#6366f1" title="Colour">
+    <button type="submit" class="btn btn-primary">Create</button>
+  </form>
+</section>
+
+<section class="panel">
+  {% if themes %}
+    <table class="table">
+      <thead><tr><th>Theme</th><th>Description</th><th class="r">Stocks</th><th></th></tr></thead>
+      <tbody>
+        {% for t in themes %}
+          <tr>
+            <td><a class="chip" style="--chip:{{ t.color }}" href="{{ url_for('theme_detail', theme_id=t.id) }}">{{ t.name }}</a></td>
+            <td class="muted">{{ t.description or '&mdash;' }}</td>
+            <td class="r">{{ t.stock_count }}</td>
+            <td class="r">
+              <form method="post" action="{{ url_for('delete_theme', theme_id=t.id) }}" class="inline"
+                    onsubmit="return confirm('Delete theme {{ t.name }}?')">
+                <button class="link-danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No themes yet. Create one above.</p>
+  {% endif %}
+</section>
+{% endblock %}

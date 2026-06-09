@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block title %}{{ stock.ticker }} · Stock Tracker{% endblock %}
+
+{% block content %}
+<div class="detail-head">
+  <div>
+    <h1>{{ stock.ticker }} <span class="muted">{{ stock.name }}</span></h1>
+    <p class="muted">
+      {{ stock.exchange or '&mdash;' }} &middot; {{ stock.sector or 'Unknown sector' }}
+      {% if stock.industry %}&middot; {{ stock.industry }}{% endif %}
+    </p>
+    <div class="theme-chips">
+      {% for t in stock_themes %}
+        <a class="chip" style="--chip:{{ t.color }}" href="{{ url_for('theme_detail', theme_id=t.id) }}">{{ t.name }}</a>
+      {% else %}
+        <span class="muted">No themes assigned</span>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="detail-actions">
+    <form method="post" action="{{ url_for('refresh_stock_route', stock_id=stock.id) }}" class="inline">
+      <button class="btn btn-primary" type="submit">Refresh metrics</button>
+    </form>
+    <form method="post" action="{{ url_for('delete_stock', stock_id=stock.id) }}" class="inline"
+          onsubmit="return confirm('Remove {{ stock.ticker }} and all its data?')">
+      <button class="btn btn-danger" type="submit">Delete</button>
+    </form>
+  </div>
+</div>
+
+{% set ov = evaluation.overall %}
+<div class="rating-banner sig-{{ ov.signal }}">
+  <div class="rating-main">
+    <span class="rating-kicker">Overall rating</span>
+    <span class="rating-value">{{ ov.rating }}</span>
+  </div>
+  <div class="rating-counts">
+    <span class="pill sig-buy">{{ ov.counts.buy }} buy</span>
+    <span class="pill sig-hold">{{ ov.counts.hold }} hold</span>
+    <span class="pill sig-sell">{{ ov.counts.sell }} sell</span>
+    <span class="pill sig-na">{{ ov.counts.na }} n/a</span>
+  </div>
+</div>
+
+{% if valuation.available %}
+{% set vo = valuation.overall %}{% set fv = valuation.fair_value %}
+<section class="panel">
+  <div class="panel-head"><h2>Valuation &mdash; is the price reasonable?</h2>
+    <span class="pill sig-{{ vo.signal }}">{{ vo.verdict }}</span>
+  </div>
+
+  {% if fv.blend %}
+  <div class="metric-grid">
+    <div class="metric"><span class="metric-label">Current price</span><span class="metric-value">{{ latest.price | num }}</span></div>
+    <div class="metric sig-{{ fv.signal }}"><span class="metric-label">Blended fair value</span><span class="metric-value">{{ fv.blend | num }}</span></div>
+    <div class="metric sig-{{ fv.signal }}"><span class="metric-label">Implied upside</span><span class="metric-value">{{ (fv.upside | num) + '%' if fv.upside is not none else '&mdash;' }}</span></div>
+  </div>
+  {% endif %}
+
+  {% if fv.anchors %}
+  <h3 class="group-title">Fair-value anchors</h3>
+  <table class="table compact">
+    <thead><tr><th>Method</th><th class="r">Fair price</th><th class="r">Upside</th></tr></thead>
+    <tbody>
+      {% for a in fv.anchors %}
+        <tr><td>{{ a.label }}</td><td class="r">{{ a.price | num }}</td>
+          <td class="r">{{ (a.upside | num) + '%' if a.upside is not none else '&mdash;' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h3 class="group-title">Peer multiples &middot; {{ valuation.peer_count }} peer(s) in shared themes</h3>
+  {% if valuation.peer_count %}
+  <table class="table compact">
+    <thead><tr><th>Multiple</th><th class="r">This stock</th><th class="r">Peer median</th><th class="r">vs peers</th></tr></thead>
+    <tbody>
+      {% for r in valuation.peers %}
+        <tr>
+          <td>{{ r.label }}</td>
+          <td class="r">{{ r.value | num }}</td>
+          <td class="r">{{ r.peer_median | num }}</td>
+          <td class="r cell sig-{{ r.signal }}">{% if r.premium is not none %}{{ '+' if r.premium >= 0 else '' }}{{ r.premium | num(0) }}%{% else %}&mdash;{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="muted small">No peers yet &mdash; tag this stock and others with a shared theme to compare multiples.</p>
+  {% endif %}
+
+  {% if valuation.bands %}
+  <h3 class="group-title">Vs own tracked history</h3>
+  <table class="table compact">
+    <thead><tr><th>Multiple</th><th class="r">Now</th><th class="r">Range</th><th class="r">Position</th></tr></thead>
+    <tbody>
+      {% for b in valuation.bands %}
+        <tr>
+          <td>{{ b.label }}</td>
+          <td class="r">{{ b.current | num }}</td>
+          <td class="r">{{ b.low | num }} &ndash; {{ b.high | num }}</td>
+          <td class="r cell sig-{{ b.signal }}">{{ b.position | num(0) }}%</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% set y = valuation.yields %}{% set rd = valuation.reverse_dcf %}
+  <h3 class="group-title">Yield &amp; implied growth</h3>
+  <div class="metric-grid">
+    <div class="metric sig-{{ y.ey_signal }}"><span class="metric-label">Earnings yield</span><span class="metric-value">{{ (y.earnings_yield | num) + '%' if y.earnings_yield is not none else '&mdash;' }}</span></div>
+    <div class="metric"><span class="metric-label">Risk-free (10y)</span><span class="metric-value">{{ y.risk_free | num(1) }}%</span></div>
+    <div class="metric"><span class="metric-label">FCF yield</span><span class="metric-value">{{ (y.fcf_yield | num) + '%' if y.fcf_yield is not none else '&mdash;' }}</span></div>
+    <div class="metric"><span class="metric-label">Implied FCF growth (5y)</span><span class="metric-value">{{ (rd.implied_growth | num(1)) + '%' if rd.implied_growth is not none else '&mdash;' }}</span></div>
+  </div>
+  <p class="muted small">
+    Implied growth = the 5-yr FCF growth the current price demands
+    (discount {{ rd.disc_rate | num(0) }}%, terminal {{ rd.terminal_growth | num(1) }}%);
+    compare it to actual growth to judge if expectations are realistic.
+  </p>
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-head"><h2>Investor signals</h2>
+    <span class="legend">
+      <span class="dot sig-buy"></span>Buy
+      <span class="dot sig-hold"></span>Hold
+      <span class="dot sig-sell"></span>Sell
+      <span class="dot sig-na"></span>Unclear
+    </span>
+  </div>
+  {% if latest %}
+    {% for group, items in evaluation.grouped %}
+      <h3 class="group-title">{{ group }}</h3>
+      <div class="metric-grid">
+        {% for r in items %}
+          <div class="metric sig-{{ r.signal }}">
+            <span class="metric-label">{{ r.label }}</span>
+            <span class="metric-value">{{ r.display }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+    <p class="muted small">
+      Signals are heuristic guides (Buffett/Graham/Lynch-style thresholds), not advice.
+      Consensus score: 1 = strong buy &middot; 3 = hold &middot; 5 = sell.
+    </p>
+  {% else %}
+    <p class="muted">No metrics yet &mdash; hit <strong>Refresh metrics</strong> to fetch the latest data.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Snapshot</h2>
+    <span class="muted">{{ snapshot_count }} snapshot(s){% if latest %} &middot; {{ latest.captured_at }}{% endif %}</span>
+  </div>
+  {% if latest %}
+    {% set tr = (latest.target_low_price | num) + ' &ndash; ' + (latest.target_high_price | num)
+                if (latest.target_low_price or latest.target_high_price) else '&mdash;' %}
+    <div class="metric-grid">
+      {% set m = [
+        ('Price', latest.price | num),
+        ('Market cap', latest.market_cap | human_num),
+        ('EPS', latest.eps | num),
+        ('Beta', latest.beta | num),
+        ('52w high', latest.fifty_two_week_high | num),
+        ('52w low', latest.fifty_two_week_low | num),
+        ('Analyst consensus', latest.recommendation_key | title_key),
+        ('# Analysts', latest.num_analysts | num(0)),
+        ('Mean target', latest.target_mean_price | num),
+        ('Target range', tr),
+      ] %}
+      {% for label, value in m %}
+        <div class="metric"><span class="metric-label">{{ label }}</span><span class="metric-value">{{ value }}</span></div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">No metrics yet.</p>
+  {% endif %}
+</section>
+
+{% if snapshot_count > 1 %}
+<section class="panel">
+  <div class="panel-head"><h2>History</h2></div>
+  <canvas id="historyChart" height="110"></canvas>
+</section>
+{% endif %}
+
+<div class="two-col">
+  <section class="panel">
+    <div class="panel-head"><h2>Decision journal</h2></div>
+    <form method="post" action="{{ url_for('add_journal_entry', stock_id=stock.id) }}" class="journal-form">
+      <div class="row">
+        <select name="entry_type">
+          {% for et in entry_types %}<option value="{{ et }}">{{ et.replace('_',' ') }}</option>{% endfor %}
+        </select>
+        <input type="date" name="entry_date">
+        <select name="conviction" title="Conviction 1-5">
+          <option value="">Conviction...</option>
+          {% for n in range(1,6) %}<option value="{{ n }}">{{ n }}/5</option>{% endfor %}
+        </select>
+      </div>
+      <input type="text" name="title" placeholder="Title (e.g. New CEO appointed)">
+      <textarea name="body" rows="3" placeholder="Thesis, management decision, risk, rationale..."></textarea>
+      <button type="submit" class="btn btn-primary">Add entry</button>
+    </form>
+
+    <div class="journal">
+      {% for e in journal %}
+        <article class="journal-entry">
+          <div class="journal-meta">
+            <span class="badge badge-{{ e.entry_type }}">{{ e.entry_type.replace('_',' ') }}</span>
+            <span class="muted">{{ e.entry_date }}</span>
+            {% if e.conviction %}<span class="conviction">{{ '*' * e.conviction }}{{ '.' * (5 - e.conviction) }}</span>{% endif %}
+            <form method="post" action="{{ url_for('delete_journal_entry', entry_id=e.id) }}" class="inline push-right">
+              <button class="link-danger" type="submit" title="Delete entry">x</button>
+            </form>
+          </div>
+          {% if e.title %}<h4>{{ e.title }}</h4>{% endif %}
+          {% if e.body %}<p>{{ e.body }}</p>{% endif %}
+        </article>
+      {% else %}
+        <p class="muted">No journal entries yet. Log your thesis, management decisions, and risks above.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Themes</h2></div>
+    <form method="post" action="{{ url_for('update_stock_themes', stock_id=stock.id) }}">
+      {% if all_themes %}
+        <div class="checklist">
+          {% set assigned_ids = stock_themes | map(attribute='id') | list %}
+          {% for t in all_themes %}
+            <label class="check">
+              <input type="checkbox" name="theme_ids" value="{{ t.id }}" {{ 'checked' if t.id in assigned_ids }}>
+              <span class="dot" style="background:{{ t.color }}"></span>{{ t.name }}
+            </label>
+          {% endfor %}
+        </div>
+        <button type="submit" class="btn">Save themes</button>
+      {% else %}
+        <p class="muted">No themes defined. <a href="{{ url_for('themes_list') }}">Create some</a> first.</p>
+      {% endif %}
+    </form>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if snapshot_count > 1 %}
+<script>
+fetch("{{ url_for('metrics_api', stock_id=stock.id) }}")
+  .then(r => r.json())
+  .then(d => {
+    new Chart(document.getElementById('historyChart'), {
+      type: 'line',
+      data: {
+        labels: d.labels,
+        datasets: [
+          { label: 'Price', data: d.price, yAxisID: 'y', tension: 0.25, borderColor: '#6366f1' },
+          { label: 'Trailing P/E', data: d.trailing_pe, yAxisID: 'y1', tension: 0.25, borderColor: '#f59e0b' }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          y:  { type: 'linear', position: 'left',  title: { display: true, text: 'Price' } },
+          y1: { type: 'linear', position: 'right', title: { display: true, text: 'P/E' }, grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  });
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · Stock Tracker{% endblock %}
+
+{% block content %}
+<div class="stats-row">
+  <div class="stat-card"><span class="stat-num">{{ totals.stocks }}</span><span class="stat-label">Stocks</span></div>
+  <div class="stat-card"><span class="stat-num">{{ totals.themes }}</span><span class="stat-label">Themes</span></div>
+  <div class="stat-card"><span class="stat-num">{{ totals.entries }}</span><span class="stat-label">Journal entries</span></div>
+</div>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Add a stock</h2>
+  </div>
+  <form method="post" action="{{ url_for('add_stock') }}" class="add-stock-form">
+    <input type="text" name="ticker" placeholder="Ticker (e.g. AAPL)" required autofocus>
+    <button type="submit" class="btn btn-primary">Add &amp; fetch metrics</button>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Themes</h2>
+    <a href="{{ url_for('themes_list') }}" class="link">Manage &rarr;</a>
+  </div>
+  {% if themes %}
+    <div class="theme-chips">
+      {% for t in themes %}
+        <a class="chip" style="--chip:{{ t.color }}" href="{{ url_for('theme_detail', theme_id=t.id) }}">
+          {{ t.name }} <span class="chip-count">{{ t.stock_count }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">No themes yet. <a href="{{ url_for('themes_list') }}">Create one</a> to start grouping stocks.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Recently added</h2>
+    <a href="{{ url_for('stocks_list') }}" class="link">All stocks &rarr;</a>
+  </div>
+  {% if recent %}
+    <table class="table">
+      <thead><tr><th>Ticker</th><th>Name</th><th class="r">Price</th><th>Last updated</th></tr></thead>
+      <tbody>
+        {% for s in recent %}
+          <tr onclick="window.location='{{ url_for('stock_detail', stock_id=s.id) }}'">
+            <td><strong>{{ s.ticker }}</strong></td>
+            <td>{{ s.name }}</td>
+            <td class="r">{{ s.price | num }}</td>
+            <td class="muted">{{ s.captured_at or '&mdash;' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No stocks tracked yet. Add one above to get started.</p>
+  {% endif %}
+</section>
+{% endblock %}

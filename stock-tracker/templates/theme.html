@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ theme.name }} · Stock Tracker{% endblock %}
+
+{% block content %}
+<div class="detail-head">
+  <div>
+    <h1><span class="chip" style="--chip:{{ theme.color }}">{{ theme.name }}</span></h1>
+    {% if theme.description %}<p class="muted">{{ theme.description }}</p>{% endif %}
+  </div>
+  <a href="{{ url_for('themes_list') }}" class="btn btn-ghost">&larr; All themes</a>
+</div>
+
+<section class="panel">
+  {% if stocks %}
+    <table class="table">
+      <thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Price</th><th class="r">Market cap</th></tr></thead>
+      <tbody>
+        {% for s in stocks %}
+          <tr onclick="window.location='{{ url_for('stock_detail', stock_id=s.id) }}'">
+            <td><strong>{{ s.ticker }}</strong></td>
+            <td>{{ s.name }}</td>
+            <td class="muted">{{ s.sector or '&mdash;' }}</td>
+            <td class="r">{{ s.price | num }}</td>
+            <td class="r">{{ s.market_cap | human_num }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No stocks tagged with this theme yet. Open a stock and assign it from the Themes panel.</p>
+  {% endif %}
+</section>
+{% endblock %}
